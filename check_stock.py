@@ -4,21 +4,27 @@ import sys
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 
 URL = "https://www.hunterboots.com.tr/p-downpour-wellington-unisex-siyah-uzun-bot-hfru0001251-blk"
 GTIN = "5063447330630"  # Downpour Siyah - 37 numara
 SIZE_LABEL = "37"
 
-BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+print(f"token tanımlı: {bool(BOT_TOKEN)} (uzunluk {len(BOT_TOKEN)}), chat_id tanımlı: {bool(CHAT_ID)}")
 TEST_MODE = os.environ.get("TEST_MODE") == "true"
 
 
 def send_telegram(text: str) -> None:
     data = urllib.parse.urlencode({"chat_id": CHAT_ID, "text": text}).encode()
     req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data)
-    with urllib.request.urlopen(req, timeout=20) as r:
-        r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            r.read()
+    except urllib.error.HTTPError as e:
+        print(f"Telegram hatası: {e.code} {e.read().decode(errors='ignore')}")
+        raise
 
 
 def get_stock():
@@ -39,7 +45,13 @@ def get_stock():
 
 
 def main():
-    result = get_stock()
+    try:
+        result = get_stock()
+    except Exception as e:
+        msg = f"⚠️ Hunter stok kontrolü: siteye erişilemedi ({type(e).__name__}: {e})"
+        print(msg)
+        send_telegram(msg)
+        sys.exit(1)
 
     if result is None:
         msg = f"⚠️ Hunter stok kontrolü: {SIZE_LABEL} numara verisi sayfada bulunamadı. Site yapısı değişmiş olabilir.\n{URL}"
