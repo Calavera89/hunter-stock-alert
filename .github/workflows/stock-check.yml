@@ -1,0 +1,38 @@
+name: Hunter stok kontrol
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # 15 dakikada bir (GitHub bazen birkaç dk geciktirir)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Test mesajı gönder"
+        type: boolean
+        default: true
+
+permissions:
+  actions: write   # stok gelince workflow'u kendi kendine kapatmak için
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Stok kontrol
+        id: check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+        run: python check_stock.py
+
+      - name: Bildirim gittiyse workflow'u kapat (spam olmasın)
+        if: steps.check.outputs.notified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable stock-check.yml --repo ${{ github.repository }}
